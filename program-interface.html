@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>환자 통증 분류</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --card-bg: #2a2a2a;
+            --card-border: #3a3a3a;
+            --pain-level-1: #2c3e50;
+            --pain-level-2: #e67e22;
+            --pain-level-3: #c0392b;
+            --unstable-vital: #e74c3c;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        h1, h2 { color: #3498db; }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .column {
+            flex: 1;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .patient-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .patient-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .pain-level-1 { border-left: 5px solid var(--pain-level-1); }
+        .pain-level-2 { border-left: 5px solid var(--pain-level-2); }
+        .pain-level-3 { border-left: 5px solid var(--pain-level-3); }
+        .unstable-vital {
+            border: 2px solid var(--unstable-vital);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: #34495e;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #2c3e50;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: #fff; }
+        #alertBox {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .history-chart {
+            background-color: var(--chart-bg);
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .history-bar {
+            height: 25px;
+            margin: 5px 0;
+            background-color: #3498db;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            border-radius: 3px;
+            color: white;
+            transition: width 0.3s ease;
+        }
+        .history-date {
+            color: #bdc3c7;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>환자 통증 분류 대시보드</h1>
+    <div class="container">
+        <div class="column" id="painLevel3">
+            <h2>Pain Level 3</h2>
+        </div>
+        <div class="column" id="painLevel2">
+            <h2>Pain Level 2</h2>
+        </div>
+        <div class="column" id="painLevel1">
+            <h2>Pain Level 1</h2>
+        </div>
+    </div>
+
+    <div id="patientModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>환자 상세 정보</h2>
+            <div id="patientDetails"></div>
+        </div>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <script>
+        let rawPatients = [
+            { name: "김철수", room: "101", vital: "안정", PSPI: 1.5, created: "2024-10-20 09:00:00" },
+            { name: "이영희", room: "102", vital: "양호", PSPI: 3.2, created: "2024-10-20 09:30:00" },
+            { name: "박지민", room: "103", vital: "불안정", PSPI: 4.5, created: "2024-10-20 10:00:00" },
+            { name: "김철수", room: "101", vital: "불안정", PSPI: 3.8, created: "2024-10-20 10:15:00" },
+            { name: "정민준", room: "104", vital: "안정", PSPI: 0.8, created: "2024-10-20 10:30:00" },
+            { name: "송지은", room: "105", vital: "불안정", PSPI: 2.7, created: "2024-10-20 11:00:00" },
+            { name: "김철수", room: "101", vital: "양호", PSPI: 2.1, created: "2024-10-20 11:30:00" }
+        ];
+
+        
+        // 환자 상세 정보 표시 함수 업데이트
+        function showPatientDetails(patient) {
+            const modal = document.getElementById('patientModal');
+            const details = document.getElementById('patientDetails');
+            
+            // 기본 정보 표시
+            details.innerHTML = `
+                <p><strong>이름:</strong> ${patient.name}</p>
+                <p><strong>방:</strong> ${patient.room}</p>
+                <p><strong>현재 상태:</strong></p>
+                <p>- Vital: ${patient.vital}</p>
+                <p>- PSPI: ${patient.PSPI}</p>
+                <p>- Pain Level: ${getPainLevel(patient.PSPI)}</p>
+                <p><strong>최근 기록:</strong> ${patient.created}</p>
+            `;
+
+            // PSPI 히스토리 차트 추가
+            if (patient.history && patient.history.length > 0) {
+                const historyDiv = document.createElement('div');
+                historyDiv.className = 'history-chart';
+                historyDiv.innerHTML = '<h3>PSPI 이력</h3>';
+
+                // 시간순으로 정렬
+                const sortedHistory = [...patient.history].sort((a, b) => 
+                    new Date(a.created) - new Date(b.created)
+                );
+
+                // 최대 PSPI 값 찾기 (차트 스케일링용)
+                const maxPSPI = Math.max(...sortedHistory.map(h => h.PSPI));
+
+                sortedHistory.forEach(record => {
+                    const width = (record.PSPI / maxPSPI * 100).toFixed(0);
+                    const date = new Date(record.created).toLocaleString();
+                    historyDiv.innerHTML += `
+                        <div class="history-date">${date} (Vital: ${record.vital})</div>
+                        <div class="history-bar" style="width: ${width}%">
+                            PSPI: ${record.PSPI}
+                        </div>
+                    `;
+                });
+
+                details.appendChild(historyDiv);
+            }
+
+            modal.style.display = "block";
+        }
+
+        // 새 환자 추가 함수 업데이트
+        function addNewPatient(newPatient) {
+            rawPatients.push(newPatient);
+            patients = consolidatePatients(rawPatients);
+            displayPatients();
+
+            const painLevel = getPainLevel(newPatient.PSPI);
+            if (painLevel >= 3 || newPatient.vital === "불안정") {
+                showAlert(`새로운 환자 기록: ${newPatient.name} (Pain Level: ${painLevel}, Vital: ${newPatient.vital})`);
+            }
+        }
+    
+        // 환자 데이터 통합 함수
+        function consolidatePatients(rawData) {
+            const patientMap = new Map();
+
+            rawData.forEach(patient => {
+                if (!patientMap.has(patient.name)) {
+                    patientMap.set(patient.name, {
+                        ...patient,
+                        history: [{ PSPI: patient.PSPI, vital: patient.vital, created: patient.created }]
+                    });
+                } else {
+                    const existingPatient = patientMap.get(patient.name);
+                    existingPatient.history.push({
+                        PSPI: patient.PSPI,
+                        vital: patient.vital,
+                        created: patient.created
+                    });
+                     // 가장 높은 PSPI 값을 가진 기록으로 현재 상태 업데이트
+                    if (patient.PSPI > existingPatient.PSPI) {
+                        existingPatient.PSPI = patient.PSPI;
+                        existingPatient.vital = patient.vital;
+                        existingPatient.created = patient.created;
+                    }
+                }
+            });
+
+            return Array.from(patientMap.values());
+        }
+
+        let patients = consolidatePatients(rawPatients);
+
+
+        function getPainLevel(PSPI) {
+            if (PSPI >= 4) return 3;
+            if (PSPI >= 2) return 2;
+            if (PSPI >= 1) return 1;
+            return 0;
+        }
+
+        function getPainLevelClass(painLevel) {
+            return `pain-level-${painLevel}`;
+        }
+
+        function getVitalPriority(vital) {
+            switch(vital) {
+                case "불안정": return 3;
+                case "양호": return 2;
+                case "안정": return 1;
+                default: return 0;
+            }
+        }
+
+        function sortPatients(a, b) {
+            const vitalDiff = getVitalPriority(b.vital) - getVitalPriority(a.vital);
+            if (vitalDiff !== 0) return vitalDiff;
+            return b.PSPI - a.PSPI;
+        }
+
+        function displayPatients() {
+            const painLevels = {1: [], 2: [], 3: []};
+            patients.forEach(patient => {
+                const painLevel = getPainLevel(patient.PSPI);
+                if (painLevel > 0) {
+                    painLevels[painLevel].push(patient);
+                }
+            });
+
+            for (let level = 3; level >= 1; level--) {
+                const column = document.getElementById(`painLevel${level}`);
+                column.innerHTML = `<h2>Pain Level ${level}</h2>`;
+                painLevels[level].sort(sortPatients).forEach(patient => {
+                    const card = document.createElement('div');
+                    card.className = `patient-card ${getPainLevelClass(level)}`;
+                    if (patient.vital === "불안정") {
+                        card.classList.add('unstable-vital');
+                    }
+                    card.innerHTML = `
+                        <strong>${patient.name}</strong><br>
+                        방: ${patient.room}<br>
+                        PSPI: ${patient.PSPI}<br>
+                        Vital: ${patient.vital}
+                    `;
+                    card.onclick = () => showPatientDetails(patient);
+                    column.appendChild(card);
+                });
+            }
+        }
+
+        function showPatientDetails(patient) {
+            const modal = document.getElementById('patientModal');
+            const details = document.getElementById('patientDetails');
+            details.innerHTML = `
+                <p><strong>이름:</strong> ${patient.name}</p>
+                <p><strong>방:</strong> ${patient.room}</p>
+                <p><strong>Vital:</strong> ${patient.vital}</p>
+                <p><strong>PSPI:</strong> ${patient.PSPI}</p>
+                <p><strong>Pain Level:</strong> ${getPainLevel(patient.PSPI)}</p>
+                <p><strong>생성 시간:</strong> ${patient.created}</p>
+            `;
+            modal.style.display = "block";
+        }
+
+        document.querySelector('.close').onclick = function() {
+            document.getElementById('patientModal').style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('patientModal')) {
+                document.getElementById('patientModal').style.display = "none";
+            }
+        }
+        
+        function showAlert(message) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.style.display = "block";
+            setTimeout(() => {
+                alertBox.style.display = "none";
+            }, 5000);
+        }
+
+        
+       
+
+        displayPatients();
+
+        setTimeout(() => {
+            addNewPatient({
+                name: "김철수",
+                room: "101",
+                vital: "불안정",
+                PSPI: 4.2,
+                created: "2024-10-20 12:00:00"
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
